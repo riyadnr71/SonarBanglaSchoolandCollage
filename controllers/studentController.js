@@ -10,10 +10,7 @@ const cloudinary = require("../config/cloudinary");
    CONSTANTS
 ========================================================= */
 
-const ALLOWED_BRANCHES = [
-  "Main Branch",
-  "2nd Branch",
-];
+
 
 const FRONTEND_URL =
   process.env.FRONTEND_URL ||
@@ -81,29 +78,8 @@ const generateStudentQR = async (
   );
 };
 
-/* =========================================================
-   VALIDATE BRANCH
-========================================================= */
 
-const validateBranch = (branch) => {
-  if (!branch) {
-    return {
-      valid: false,
-      message: "Branch is required.",
-    };
-  }
 
-  if (!ALLOWED_BRANCHES.includes(branch)) {
-    return {
-      valid: false,
-      message: "Invalid branch selected.",
-    };
-  }
-
-  return {
-    valid: true,
-  };
-};
 
 /* =========================================================
    ADD STUDENT
@@ -117,7 +93,7 @@ const addStudent = async (req, res) => {
       name,
       idCard,
       roll,
-      branch,
+     
       className,
       section,
       session,
@@ -166,15 +142,7 @@ const addStudent = async (req, res) => {
       });
     }
 
-    const branchValidation =
-      validateBranch(branch);
-
-    if (!branchValidation.valid) {
-      return res.status(400).json({
-        success: false,
-        message: branchValidation.message,
-      });
-    }
+ 
 
     /* =====================================================
        CHECK DUPLICATE STUDENT ID
@@ -254,7 +222,7 @@ const addStudent = async (req, res) => {
         ? String(roll).trim()
         : "",
 
-      branch: branch.trim(),
+     
 
       className: className.trim(),
 
@@ -517,7 +485,7 @@ const updateStudent = async (
       name,
       idCard,
       roll,
-      branch,
+    
       className,
       section,
       session,
@@ -567,15 +535,7 @@ const updateStudent = async (
       });
     }
 
-    const branchValidation =
-      validateBranch(branch);
 
-    if (!branchValidation.valid) {
-      return res.status(400).json({
-        success: false,
-        message: branchValidation.message,
-      });
-    }
 
     /* =====================================================
        CHECK DUPLICATE ID
@@ -653,7 +613,7 @@ const updateStudent = async (
         ? String(roll).trim()
         : "",
 
-      branch: branch.trim(),
+      
 
       className: className.trim(),
 
@@ -825,7 +785,7 @@ const resetStudentPassword = async (
       message:
         "Student password reset successfully.",
 
-      generatedPassword:
+      password:
         plainPassword,
     });
   } catch (error) {

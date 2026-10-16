@@ -1,3 +1,4 @@
+
 const { ObjectId } = require("mongodb");
 const { getDB } = require("../config/db");
 
@@ -52,7 +53,11 @@ const timeToSeconds = (time) => {
   const minute = Number(parts[1]) || 0;
   const second = Number(parts[2]) || 0;
 
-  return hour * 3600 + minute * 60 + second;
+  return (
+    hour * 3600 +
+    minute * 60 +
+    second
+  );
 };
 
 /* =========================================================
@@ -74,11 +79,13 @@ const getSettings = async () => {
       lateAllowed: true,
     };
 
-    await db.collection("attendanceSettings").insertOne({
-      ...settings,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await db
+      .collection("attendanceSettings")
+      .insertOne({
+        ...settings,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
   }
 
   return settings;
@@ -88,13 +95,17 @@ const getSettings = async () => {
    FIND STUDENT FROM QR
 ========================================================= */
 
-const findStudentFromScan = async (scanValue) => {
+const findStudentFromScan = async (
+  scanValue
+) => {
   const db = getDB();
 
   const studentsCollection =
     db.collection("students");
 
-  const value = String(scanValue || "").trim();
+  const value = String(
+    scanValue || ""
+  ).trim();
 
   if (!value) return null;
 
@@ -102,9 +113,10 @@ const findStudentFromScan = async (scanValue) => {
      1. ID CARD
   ------------------------------------------------------- */
 
-  let student = await studentsCollection.findOne({
-    idCard: value,
-  });
+  let student =
+    await studentsCollection.findOne({
+      idCard: value,
+    });
 
   if (student) return student;
 
@@ -112,9 +124,10 @@ const findStudentFromScan = async (scanValue) => {
      2. QR CODE
   ------------------------------------------------------- */
 
-  student = await studentsCollection.findOne({
-    qrCode: value,
-  });
+  student =
+    await studentsCollection.findOne({
+      qrCode: value,
+    });
 
   if (student) return student;
 
@@ -123,9 +136,10 @@ const findStudentFromScan = async (scanValue) => {
   ------------------------------------------------------- */
 
   if (ObjectId.isValid(value)) {
-    student = await studentsCollection.findOne({
-      _id: new ObjectId(value),
-    });
+    student =
+      await studentsCollection.findOne({
+        _id: new ObjectId(value),
+      });
 
     if (student) return student;
   }
@@ -134,16 +148,19 @@ const findStudentFromScan = async (scanValue) => {
      4. STUDENT URL
   ------------------------------------------------------- */
 
-  const studentUrlMatch = value.match(
-    /\/student\/([a-fA-F0-9]{24})/
-  );
+  const studentUrlMatch =
+    value.match(
+      /\/student\/([a-fA-F0-9]{24})/
+    );
 
   if (studentUrlMatch) {
-    const studentId = studentUrlMatch[1];
+    const studentId =
+      studentUrlMatch[1];
 
-    student = await studentsCollection.findOne({
-      _id: new ObjectId(studentId),
-    });
+    student =
+      await studentsCollection.findOne({
+        _id: new ObjectId(studentId),
+      });
 
     if (student) return student;
   }
@@ -152,42 +169,36 @@ const findStudentFromScan = async (scanValue) => {
 };
 
 /* =========================================================
-   TEACHER CLASS ACCESS
-========================================================= */
-
-const teacherCanAccessClass = (
-  teacher,
-  className
-) => {
-  if (!teacher) return false;
-
-  if (!Array.isArray(teacher.assignments)) {
-    return false;
-  }
-
-  return teacher.assignments.some(
-    (assignment) =>
-      String(
-        assignment.className || ""
-      ).trim() ===
-      String(className || "").trim()
-  );
-};
-
-/* =========================================================
    STUDENT RESPONSE
 ========================================================= */
 
-const getStudentResponse = (student) => {
+const getStudentResponse = (
+  student
+) => {
   return {
     _id: student._id,
-    name: student.name,
-    idCard: student.idCard,
-    roll: student.roll,
-    branch: student.branch || "Main Branch",
-    className: student.className,
-    section: student.section,
-    image: student.image || null,
+
+    name:
+      student.name,
+
+    idCard:
+      student.idCard,
+
+    roll:
+      student.roll,
+
+    branch:
+      student.branch ||
+      "Main Branch",
+
+    className:
+      student.className,
+
+    section:
+      student.section,
+
+    image:
+      student.image || null,
   };
 };
 
@@ -195,19 +206,23 @@ const getStudentResponse = (student) => {
    SCAN ATTENDANCE
 ========================================================= */
 
-const scanAttendance = async (req, res) => {
+const scanAttendance = async (
+  req,
+  res
+) => {
   try {
     const db = getDB();
 
     const {
       scanValue,
       confirmExit = false,
-    } = req.body;
+    } = req.body || {};
 
     if (!scanValue) {
       return res.status(400).json({
         success: false,
-        message: "QR code value is required.",
+        message:
+          "QR code value is required.",
       });
     }
 
@@ -216,12 +231,15 @@ const scanAttendance = async (req, res) => {
     ------------------------------------------------------- */
 
     const student =
-      await findStudentFromScan(scanValue);
+      await findStudentFromScan(
+        scanValue
+      );
 
     if (!student) {
       return res.status(404).json({
         success: false,
-        message: "Student not found.",
+        message:
+          "Student not found.",
       });
     }
 
@@ -231,49 +249,36 @@ const scanAttendance = async (req, res) => {
 
     if (
       student.status &&
-      String(student.status).toLowerCase() !==
+      String(
+        student.status
+      ).toLowerCase() !==
         "active"
     ) {
       return res.status(403).json({
         success: false,
-        message: "This student is not active.",
+        message:
+          "This student is not active.",
       });
     }
 
-    /* -------------------------------------------------------
-       TEACHER CLASS RESTRICTION
-    ------------------------------------------------------- */
+    const today =
+      getTodayDate();
 
-    if (
-      req.attendanceUserType === "teacher"
-    ) {
-      const allowed =
-        teacherCanAccessClass(
-          req.teacherData,
-          student.className
-        );
-
-      if (!allowed) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You are not assigned to this student's class.",
-        });
-      }
-    }
-
-    const today = getTodayDate();
-    const currentTime = getCurrentTime();
+    const currentTime =
+      getCurrentTime();
 
     /* -------------------------------------------------------
        FIND TODAY ATTENDANCE
     ------------------------------------------------------- */
 
     const existingAttendance =
-      await db.collection("attendance").findOne({
-        studentId: student._id,
-        date: today,
-      });
+      await db
+        .collection("attendance")
+        .findOne({
+          studentId:
+            student._id,
+          date: today,
+        });
 
     /* =======================================================
        LEAVE CHECK
@@ -281,7 +286,8 @@ const scanAttendance = async (req, res) => {
 
     if (
       existingAttendance &&
-      existingAttendance.status === "Leave"
+      existingAttendance.status ===
+        "Leave"
     ) {
       return res.status(409).json({
         success: false,
@@ -289,8 +295,12 @@ const scanAttendance = async (req, res) => {
         action: "leave",
         message:
           "This student is on leave today.",
-        student: getStudentResponse(student),
-        attendance: existingAttendance,
+        student:
+          getStudentResponse(
+            student
+          ),
+        attendance:
+          existingAttendance,
       });
     }
 
@@ -309,8 +319,12 @@ const scanAttendance = async (req, res) => {
         action: "completed",
         message:
           "Attendance entry and exit are already completed for today.",
-        student: getStudentResponse(student),
-        attendance: existingAttendance,
+        student:
+          getStudentResponse(
+            student
+          ),
+        attendance:
+          existingAttendance,
       });
     }
 
@@ -318,31 +332,42 @@ const scanAttendance = async (req, res) => {
        GET SETTINGS
     ------------------------------------------------------- */
 
-    const settings = await getSettings();
+    const settings =
+      await getSettings();
 
     const currentMinutes =
-      timeToMinutes(currentTime);
+      timeToMinutes(
+        currentTime
+      );
 
     const startMinutes =
       timeToMinutes(
-        settings.attendanceStartTime || "08:00"
+        settings.attendanceStartTime ||
+          "08:00"
       );
 
     const absentAfterMinutes =
       timeToMinutes(
-        settings.absentAfterTime || "09:00"
+        settings.absentAfterTime ||
+          "09:00"
       );
 
     /* =======================================================
        BEFORE ATTENDANCE START
     ======================================================= */
 
-    if (currentMinutes < startMinutes) {
+    if (
+      currentMinutes <
+      startMinutes
+    ) {
       return res.status(400).json({
         success: false,
         message:
           `Attendance has not started yet. Attendance starts at ${settings.attendanceStartTime}.`,
-        student: getStudentResponse(student),
+        student:
+          getStudentResponse(
+            student
+          ),
       });
     }
 
@@ -354,10 +379,12 @@ const scanAttendance = async (req, res) => {
       let status = "Present";
 
       if (
-        currentMinutes >= absentAfterMinutes
+        currentMinutes >=
+        absentAfterMinutes
       ) {
         if (
-          settings.lateAllowed !== false
+          settings.lateAllowed !==
+          false
         ) {
           status = "Late";
         } else {
@@ -366,13 +393,20 @@ const scanAttendance = async (req, res) => {
             message:
               "Attendance time is over. Late attendance is not allowed.",
             student:
-              getStudentResponse(student),
+              getStudentResponse(
+                student
+              ),
           });
         }
       }
 
+      /* =====================================================
+         ATTENDANCE DATA
+      ===================================================== */
+
       const attendanceData = {
-        studentId: student._id,
+        studentId:
+          student._id,
 
         studentIdCard:
           student.idCard || "",
@@ -381,7 +415,8 @@ const scanAttendance = async (req, res) => {
           student.name || "",
 
         branch:
-          student.branch || "Main Branch",
+          student.branch ||
+          "Main Branch",
 
         className:
           student.className || "",
@@ -391,7 +426,8 @@ const scanAttendance = async (req, res) => {
 
         date: today,
 
-        entryTime: currentTime,
+        entryTime:
+          currentTime,
 
         exitTime: null,
 
@@ -399,18 +435,30 @@ const scanAttendance = async (req, res) => {
 
         leaveReason: "",
 
-        createdAt: new Date(),
+        createdAt:
+          new Date(),
 
-        updatedAt: new Date(),
+        updatedAt:
+          new Date(),
       };
 
+      /* =====================================================
+         INSERT
+      ===================================================== */
+
       const result =
-        await db.collection("attendance").insertOne(
-          attendanceData
-        );
+        await db
+          .collection(
+            "attendance"
+          )
+          .insertOne(
+            attendanceData
+          );
 
       const savedAttendance = {
-        _id: result.insertedId,
+        _id:
+          result.insertedId,
+
         ...attendanceData,
       };
 
@@ -421,11 +469,12 @@ const scanAttendance = async (req, res) => {
           status === "Late"
             ? "Late attendance marked successfully."
             : "Attendance entry marked successfully.",
-
         student:
-          getStudentResponse(student),
-
-        attendance: savedAttendance,
+          getStudentResponse(
+            student
+          ),
+        attendance:
+          savedAttendance,
       });
     }
 
@@ -447,26 +496,33 @@ const scanAttendance = async (req, res) => {
         );
 
       const currentSeconds =
-        timeToSeconds(currentTime);
+        timeToSeconds(
+          currentTime
+        );
 
       let elapsedSeconds =
-        currentSeconds - entrySeconds;
+        currentSeconds -
+        entrySeconds;
 
       /* -----------------------------------------------------
          MIDNIGHT PROTECTION
       ----------------------------------------------------- */
 
       if (elapsedSeconds < 0) {
-        elapsedSeconds += 24 * 60 * 60;
+        elapsedSeconds +=
+          24 * 60 * 60;
       }
 
       /* =====================================================
          LESS THAN 2 MINUTES
       ===================================================== */
 
-      if (elapsedSeconds < 120) {
+      if (
+        elapsedSeconds < 120
+      ) {
         const remainingSeconds =
-          120 - elapsedSeconds;
+          120 -
+          elapsedSeconds;
 
         const remainingMinutes =
           Math.ceil(
@@ -483,8 +539,11 @@ const scanAttendance = async (req, res) => {
                 : ""
             }.`,
           student:
-            getStudentResponse(student),
-          attendance: existingAttendance,
+            getStudentResponse(
+              student
+            ),
+          attendance:
+            existingAttendance,
         });
       }
 
@@ -495,15 +554,18 @@ const scanAttendance = async (req, res) => {
       if (!confirmExit) {
         return res.status(200).json({
           success: true,
-          action: "confirm-exit",
-          requiresExitConfirmation: true,
+          action:
+            "confirm-exit",
+          requiresExitConfirmation:
+            true,
           message:
             "Student entry found. Confirm exit.",
-
           student:
-            getStudentResponse(student),
-
-          attendance: existingAttendance,
+            getStudentResponse(
+              student
+            ),
+          attendance:
+            existingAttendance,
         });
       }
 
@@ -511,33 +573,51 @@ const scanAttendance = async (req, res) => {
          CONFIRM EXIT
       ===================================================== */
 
-      const exitTime = getCurrentTime();
+      const exitTime =
+        getCurrentTime();
 
       const updateResult =
-        await db.collection("attendance").updateOne(
-          {
-            _id: existingAttendance._id,
-            studentId: student._id,
-            date: today,
-            exitTime: null,
-          },
-          {
-            $set: {
-              exitTime: exitTime,
-              updatedAt: new Date(),
+        await db
+          .collection("attendance")
+          .updateOne(
+            {
+              _id:
+                existingAttendance._id,
+
+              studentId:
+                student._id,
+
+              date: today,
+
+              exitTime: null,
             },
-          }
-        );
+            {
+              $set: {
+                exitTime,
+
+                updatedAt:
+                  new Date(),
+              },
+            }
+          );
 
       /* -----------------------------------------------------
          UPDATE FAILED
       ----------------------------------------------------- */
 
-      if (updateResult.matchedCount === 0) {
+      if (
+        updateResult.matchedCount ===
+        0
+      ) {
         const latestAttendance =
-          await db.collection("attendance").findOne({
-            _id: existingAttendance._id,
-          });
+          await db
+            .collection(
+              "attendance"
+            )
+            .findOne({
+              _id:
+                existingAttendance._id,
+            });
 
         if (
           latestAttendance &&
@@ -545,13 +625,18 @@ const scanAttendance = async (req, res) => {
         ) {
           return res.status(409).json({
             success: false,
-            alreadyCompleted: true,
-            action: "completed",
+            alreadyCompleted:
+              true,
+            action:
+              "completed",
             message:
               "Attendance exit is already completed.",
             student:
-              getStudentResponse(student),
-            attendance: latestAttendance,
+              getStudentResponse(
+                student
+              ),
+            attendance:
+              latestAttendance,
           });
         }
 
@@ -567,20 +652,26 @@ const scanAttendance = async (req, res) => {
       ----------------------------------------------------- */
 
       const updatedAttendance =
-        await db.collection("attendance").findOne({
-          _id: existingAttendance._id,
-        });
+        await db
+          .collection(
+            "attendance"
+          )
+          .findOne({
+            _id:
+              existingAttendance._id,
+          });
 
       return res.status(200).json({
         success: true,
         action: "exit",
         message:
           "Exit time marked successfully.",
-
         student:
-          getStudentResponse(student),
-
-        attendance: updatedAttendance,
+          getStudentResponse(
+            student
+          ),
+        attendance:
+          updatedAttendance,
       });
     }
 
@@ -591,7 +682,7 @@ const scanAttendance = async (req, res) => {
     });
   } catch (error) {
     console.error(
-      "Scan Attendance Error:",
+      "❌ Scan Attendance Error:",
       error
     );
 
@@ -607,7 +698,10 @@ const scanAttendance = async (req, res) => {
    GET TODAY ATTENDANCE
 ========================================================= */
 
-const getTodayAttendance = async (req, res) => {
+const getTodayAttendance = async (
+  req,
+  res
+) => {
   try {
     const db = getDB();
 
@@ -629,46 +723,8 @@ const getTodayAttendance = async (req, res) => {
     }
 
     if (className) {
-      query.className = className;
-    }
-
-    /* -------------------------------------------------------
-       TEACHER RESTRICTION
-    ------------------------------------------------------- */
-
-    if (
-      req.attendanceUserType === "teacher"
-    ) {
-      const teacher = req.teacherData;
-
-      const assignedClasses =
-        Array.isArray(
-          teacher.assignments
-        )
-          ? [
-              ...new Set(
-                teacher.assignments
-                  .map((item) =>
-                    String(
-                      item.className || ""
-                    ).trim()
-                  )
-                  .filter(Boolean)
-              ),
-            ]
-          : [];
-
-      if (!assignedClasses.length) {
-        return res.status(200).json({
-          success: true,
-          date: targetDate,
-          attendance: [],
-        });
-      }
-
-      query.className = {
-        $in: assignedClasses,
-      };
+      query.className =
+        className;
     }
 
     const attendance =
@@ -688,7 +744,7 @@ const getTodayAttendance = async (req, res) => {
     });
   } catch (error) {
     console.error(
-      "Get Today Attendance Error:",
+      "❌ Get Today Attendance Error:",
       error
     );
 
@@ -711,54 +767,45 @@ const getStudentAttendance = async (
   try {
     const db = getDB();
 
-    const { studentId } = req.params;
+    const { studentId } =
+      req.params;
 
-    if (!ObjectId.isValid(studentId)) {
+    if (
+      !ObjectId.isValid(
+        studentId
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid student ID.",
+        message:
+          "Invalid student ID.",
       });
     }
 
     const student =
-      await db.collection("students").findOne({
-        _id: new ObjectId(studentId),
-      });
+      await db
+        .collection("students")
+        .findOne({
+          _id:
+            new ObjectId(
+              studentId
+            ),
+        });
 
     if (!student) {
       return res.status(404).json({
         success: false,
-        message: "Student not found.",
+        message:
+          "Student not found.",
       });
-    }
-
-    /* -------------------------------------------------------
-       TEACHER CLASS CHECK
-    ------------------------------------------------------- */
-
-    if (
-      req.attendanceUserType === "teacher"
-    ) {
-      const allowed =
-        teacherCanAccessClass(
-          req.teacherData,
-          student.className
-        );
-
-      if (!allowed) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You are not assigned to this student's class.",
-        });
-      }
     }
 
     const attendance =
       await db
         .collection("attendance")
         .find({
-          studentId: student._id,
+          studentId:
+            student._id,
         })
         .sort({
           date: -1,
@@ -767,14 +814,15 @@ const getStudentAttendance = async (
 
     return res.status(200).json({
       success: true,
-
-      student: getStudentResponse(student),
-
+      student:
+        getStudentResponse(
+          student
+        ),
       attendance,
     });
   } catch (error) {
     console.error(
-      "Get Student Attendance Error:",
+      "❌ Get Student Attendance Error:",
       error
     );
 
@@ -797,7 +845,8 @@ const getClassAttendance = async (
   try {
     const db = getDB();
 
-    const { className } = req.params;
+    const { className } =
+      req.params;
 
     const {
       branch = "",
@@ -807,35 +856,17 @@ const getClassAttendance = async (
     if (!className) {
       return res.status(400).json({
         success: false,
-        message: "Class name is required.",
+        message:
+          "Class name is required.",
       });
-    }
-
-    /* -------------------------------------------------------
-       TEACHER CLASS CHECK
-    ------------------------------------------------------- */
-
-    if (
-      req.attendanceUserType === "teacher"
-    ) {
-      const allowed =
-        teacherCanAccessClass(
-          req.teacherData,
-          className
-        );
-
-      if (!allowed) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You are not assigned to this class.",
-        });
-      }
     }
 
     const query = {
       className,
-      date: date || getTodayDate(),
+
+      date:
+        date ||
+        getTodayDate(),
     };
 
     if (branch) {
@@ -856,12 +887,13 @@ const getClassAttendance = async (
       className,
       branch,
       date:
-        date || getTodayDate(),
+        date ||
+        getTodayDate(),
       attendance,
     });
   } catch (error) {
     console.error(
-      "Get Class Attendance Error:",
+      "❌ Get Class Attendance Error:",
       error
     );
 
@@ -877,7 +909,10 @@ const getClassAttendance = async (
    MARK LEAVE
 ========================================================= */
 
-const markLeave = async (req, res) => {
+const markLeave = async (
+  req,
+  res
+) => {
   try {
     const db = getDB();
 
@@ -885,39 +920,54 @@ const markLeave = async (req, res) => {
       studentId,
       date = getTodayDate(),
       leaveReason = "",
-    } = req.body;
+    } = req.body || {};
 
     if (!studentId) {
       return res.status(400).json({
         success: false,
-        message: "Student ID is required.",
+        message:
+          "Student ID is required.",
       });
     }
 
-    if (!ObjectId.isValid(studentId)) {
+    if (
+      !ObjectId.isValid(
+        studentId
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid student ID.",
+        message:
+          "Invalid student ID.",
       });
     }
 
     const student =
-      await db.collection("students").findOne({
-        _id: new ObjectId(studentId),
-      });
+      await db
+        .collection("students")
+        .findOne({
+          _id:
+            new ObjectId(
+              studentId
+            ),
+        });
 
     if (!student) {
       return res.status(404).json({
         success: false,
-        message: "Student not found.",
+        message:
+          "Student not found.",
       });
     }
 
     const existing =
-      await db.collection("attendance").findOne({
-        studentId: student._id,
-        date,
-      });
+      await db
+        .collection("attendance")
+        .findOne({
+          studentId:
+            student._id,
+          date,
+        });
 
     /* -------------------------------------------------------
        ALREADY PRESENT
@@ -926,15 +976,18 @@ const markLeave = async (req, res) => {
     if (
       existing &&
       (
-        existing.status === "Present" ||
-        existing.status === "Late"
+        existing.status ===
+          "Present" ||
+        existing.status ===
+          "Late"
       )
     ) {
       return res.status(409).json({
         success: false,
         message:
           "This student already has attendance for this date. You cannot mark leave.",
-        attendance: existing,
+        attendance:
+          existing,
       });
     }
 
@@ -944,55 +997,83 @@ const markLeave = async (req, res) => {
 
     if (
       existing &&
-      existing.status === "Leave"
+      existing.status ===
+        "Leave"
     ) {
       return res.status(409).json({
         success: false,
         message:
           "Leave is already marked for this student.",
-        attendance: existing,
+        attendance:
+          existing,
       });
     }
 
+    /* =====================================================
+       LEAVE DATA
+    ===================================================== */
+
     const leaveData = {
-      studentId: student._id,
+      studentId:
+        student._id,
+
       studentIdCard:
         student.idCard || "",
+
       studentName:
         student.name || "",
+
       branch:
-        student.branch || "Main Branch",
+        student.branch ||
+        "Main Branch",
+
       className:
         student.className || "",
+
       section:
         student.section || "",
+
       date,
+
       entryTime: null,
+
       exitTime: null,
+
       status: "Leave",
+
       leaveReason:
-        String(leaveReason || "").trim(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
+        String(
+          leaveReason || ""
+        ).trim(),
+
+      createdAt:
+        new Date(),
+
+      updatedAt:
+        new Date(),
     };
 
     const result =
-      await db.collection("attendance").insertOne(
-        leaveData
-      );
+      await db
+        .collection("attendance")
+        .insertOne(
+          leaveData
+        );
 
     return res.status(201).json({
       success: true,
       message:
         "Leave marked successfully.",
       attendance: {
-        _id: result.insertedId,
+        _id:
+          result.insertedId,
+
         ...leaveData,
       },
     });
   } catch (error) {
     console.error(
-      "Mark Leave Error:",
+      "❌ Mark Leave Error:",
       error
     );
 
@@ -1015,9 +1096,12 @@ const updateAttendance = async (
   try {
     const db = getDB();
 
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
-    if (!ObjectId.isValid(id)) {
+    if (
+      !ObjectId.isValid(id)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -1031,34 +1115,48 @@ const updateAttendance = async (
       status,
       leaveReason,
       branch,
-    } = req.body;
+    } = req.body || {};
 
     const updateData = {
-      updatedAt: new Date(),
+      updatedAt:
+        new Date(),
     };
 
-    if (entryTime !== undefined) {
+    if (
+      entryTime !== undefined
+    ) {
       updateData.entryTime =
         entryTime || null;
     }
 
-    if (exitTime !== undefined) {
+    if (
+      exitTime !== undefined
+    ) {
       updateData.exitTime =
         exitTime || null;
     }
 
-    if (status !== undefined) {
-      updateData.status = status;
+    if (
+      status !== undefined
+    ) {
+      updateData.status =
+        status;
     }
 
-    if (leaveReason !== undefined) {
+    if (
+      leaveReason !==
+      undefined
+    ) {
       updateData.leaveReason =
         leaveReason || "";
     }
 
-    if (branch !== undefined) {
+    if (
+      branch !== undefined
+    ) {
       updateData.branch =
-        branch || "Main Branch";
+        branch ||
+        "Main Branch";
     }
 
     const result =
@@ -1066,18 +1164,22 @@ const updateAttendance = async (
         .collection("attendance")
         .findOneAndUpdate(
           {
-            _id: new ObjectId(id),
+            _id:
+              new ObjectId(id),
           },
           {
-            $set: updateData,
+            $set:
+              updateData,
           },
           {
-            returnDocument: "after",
+            returnDocument:
+              "after",
           }
         );
 
     const attendance =
-      result.value || result;
+      result.value ||
+      result;
 
     if (!attendance) {
       return res.status(404).json({
@@ -1095,7 +1197,7 @@ const updateAttendance = async (
     });
   } catch (error) {
     console.error(
-      "Update Attendance Error:",
+      "❌ Update Attendance Error:",
       error
     );
 
@@ -1118,9 +1220,12 @@ const deleteAttendance = async (
   try {
     const db = getDB();
 
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
-    if (!ObjectId.isValid(id)) {
+    if (
+      !ObjectId.isValid(id)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -1132,10 +1237,13 @@ const deleteAttendance = async (
       await db
         .collection("attendance")
         .deleteOne({
-          _id: new ObjectId(id),
+          _id:
+            new ObjectId(id),
         });
 
-    if (!result.deletedCount) {
+    if (
+      !result.deletedCount
+    ) {
       return res.status(404).json({
         success: false,
         message:
@@ -1147,10 +1255,12 @@ const deleteAttendance = async (
       success: true,
       message:
         "Attendance deleted successfully.",
+      deletedCount:
+        result.deletedCount,
     });
   } catch (error) {
     console.error(
-      "Delete Attendance Error:",
+      "❌ Delete Attendance Error:",
       error
     );
 
@@ -1158,6 +1268,99 @@ const deleteAttendance = async (
       success: false,
       message:
         "Failed to delete attendance.",
+    });
+  }
+};
+
+/* =========================================================
+   BULK DELETE ATTENDANCE
+========================================================= */
+
+const bulkDeleteAttendance = async (
+  req,
+  res
+) => {
+  try {
+    const db = getDB();
+
+    const {
+      fromDate,
+      toDate,
+      branch = "",
+      className = "",
+    } = req.body || {};
+
+    /* -------------------------------------------------------
+       DATE VALIDATION
+    ------------------------------------------------------- */
+
+    if (!fromDate || !toDate) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "From date and To date are required.",
+      });
+    }
+
+    if (fromDate > toDate) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "From date cannot be greater than to date.",
+      });
+    }
+
+    /* -------------------------------------------------------
+       BUILD DELETE QUERY
+    ------------------------------------------------------- */
+
+    const query = {
+      date: {
+        $gte: fromDate,
+        $lte: toDate,
+      },
+    };
+
+    if (branch) {
+      query.branch = branch;
+    }
+
+    if (className) {
+      query.className = className;
+    }
+
+    /* -------------------------------------------------------
+       DELETE REAL DATABASE RECORDS ONLY
+    ------------------------------------------------------- */
+
+    const result =
+      await db
+        .collection("attendance")
+        .deleteMany(query);
+
+    return res.status(200).json({
+      success: true,
+      message:
+        `${result.deletedCount} attendance record(s) deleted successfully.`,
+      deletedCount:
+        result.deletedCount,
+      filters: {
+        fromDate,
+        toDate,
+        branch,
+        className,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "❌ Bulk Delete Attendance Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to delete attendance records.",
     });
   }
 };
@@ -1181,12 +1384,16 @@ const getAttendanceReport = async (
     } = req.query;
 
     const startDate =
-      fromDate || getTodayDate();
+      fromDate ||
+      getTodayDate();
 
     const endDate =
-      toDate || startDate;
+      toDate ||
+      startDate;
 
-    if (startDate > endDate) {
+    if (
+      startDate > endDate
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -1205,11 +1412,13 @@ const getAttendanceReport = async (
     };
 
     if (branch) {
-      studentQuery.branch = branch;
+      studentQuery.branch =
+        branch;
     }
 
     if (className) {
-      studentQuery.className = className;
+      studentQuery.className =
+        className;
     }
 
     const students =
@@ -1224,42 +1433,6 @@ const getAttendanceReport = async (
         .toArray();
 
     /* -------------------------------------------------------
-       TEACHER RESTRICTION
-    ------------------------------------------------------- */
-
-    let allowedClasses = null;
-
-    if (
-      req.attendanceUserType === "teacher"
-    ) {
-      allowedClasses = [
-        ...new Set(
-          (
-            req.teacherData.assignments ||
-            []
-          )
-            .map((item) =>
-              String(
-                item.className || ""
-              ).trim()
-            )
-            .filter(Boolean)
-        ),
-      ];
-    }
-
-    const filteredStudents =
-      allowedClasses === null
-        ? students
-        : students.filter((student) =>
-            allowedClasses.includes(
-              String(
-                student.className || ""
-              ).trim()
-            )
-          );
-
-    /* -------------------------------------------------------
        ATTENDANCE RECORDS
     ------------------------------------------------------- */
 
@@ -1271,7 +1444,8 @@ const getAttendanceReport = async (
     };
 
     if (branch) {
-      attendanceQuery.branch = branch;
+      attendanceQuery.branch =
+        branch;
     }
 
     if (className) {
@@ -1279,30 +1453,30 @@ const getAttendanceReport = async (
         className;
     }
 
-    if (allowedClasses) {
-      attendanceQuery.className = {
-        $in: allowedClasses,
-      };
-    }
-
     const attendanceRecords =
       await db
         .collection("attendance")
-        .find(attendanceQuery)
+        .find(
+          attendanceQuery
+        )
         .toArray();
 
     /* -------------------------------------------------------
        ATTENDANCE MAP
     ------------------------------------------------------- */
 
-    const attendanceMap = new Map();
+    const attendanceMap =
+      new Map();
 
     attendanceRecords.forEach(
       (record) => {
         const key =
           `${record.studentId}_${record.date}`;
 
-        attendanceMap.set(key, record);
+        attendanceMap.set(
+          key,
+          record
+        );
       }
     );
 
@@ -1326,17 +1500,21 @@ const getAttendanceReport = async (
           `${end}T00:00:00`
         );
 
-      while (current <= last) {
+      while (
+        current <= last
+      ) {
         const year =
           current.getFullYear();
 
-        const month = String(
-          current.getMonth() + 1
-        ).padStart(2, "0");
+        const month =
+          String(
+            current.getMonth() + 1
+          ).padStart(2, "0");
 
-        const day = String(
-          current.getDate()
-        ).padStart(2, "0");
+        const day =
+          String(
+            current.getDate()
+          ).padStart(2, "0");
 
         dates.push(
           `${year}-${month}-${day}`
@@ -1362,101 +1540,142 @@ const getAttendanceReport = async (
 
     const report = [];
 
-    dates.forEach((date) => {
-      filteredStudents.forEach(
-        (student) => {
-          const key =
-            `${student._id}_${date}`;
+    dates.forEach(
+      (date) => {
+        students.forEach(
+          (student) => {
+            const key =
+              `${student._id}_${date}`;
 
-          const attendance =
-            attendanceMap.get(key);
+            const attendance =
+              attendanceMap.get(
+                key
+              );
 
-          let status = "Absent";
-          let entryTime = null;
-          let exitTime = null;
-          let leaveReason = "";
+            let status =
+              "Absent";
 
-          if (attendance) {
-            status =
-              attendance.status ||
-              "Present";
-
-            entryTime =
-              attendance.entryTime ||
+            let entryTime =
               null;
 
-            exitTime =
-              attendance.exitTime ||
+            let exitTime =
               null;
 
-            leaveReason =
-              attendance.leaveReason ||
+            let leaveReason =
               "";
+
+            let virtual = true;
+
+            let attendanceId =
+              null;
+
+            if (attendance) {
+              status =
+                attendance.status ||
+                "Present";
+
+              entryTime =
+                attendance.entryTime ||
+                null;
+
+              exitTime =
+                attendance.exitTime ||
+                null;
+
+              leaveReason =
+                attendance.leaveReason ||
+                "";
+
+              virtual = false;
+
+              attendanceId =
+                attendance._id;
+            }
+
+            report.push({
+              _id:
+                attendanceId ||
+                `virtual-${student._id}-${date}`,
+
+              date,
+
+              studentId:
+                student._id,
+
+              studentIdCard:
+                student.idCard ||
+                "",
+
+              studentName:
+                student.name ||
+                "",
+
+              roll:
+                student.roll ||
+                "",
+
+              branch:
+                student.branch ||
+                "Main Branch",
+
+              className:
+                student.className ||
+                "",
+
+              section:
+                student.section ||
+                "",
+
+              entryTime,
+
+              exitTime,
+
+              status,
+
+              leaveReason,
+
+              virtual,
+            });
           }
-
-          report.push({
-            date,
-
-            studentId:
-              student._id,
-
-            studentIdCard:
-              student.idCard || "",
-
-            studentName:
-              student.name || "",
-
-            roll:
-              student.roll || "",
-
-            branch:
-              student.branch ||
-              "Main Branch",
-
-            className:
-              student.className || "",
-
-            section:
-              student.section || "",
-
-            entryTime,
-
-            exitTime,
-
-            status,
-
-            leaveReason,
-          });
-        }
-      );
-    });
+        );
+      }
+    );
 
     /* -------------------------------------------------------
        SUMMARY
     ------------------------------------------------------- */
 
     const summary = {
-      total: report.length,
+      total:
+        report.length,
 
-      present: report.filter(
-        (item) =>
-          item.status === "Present"
-      ).length,
+      present:
+        report.filter(
+          (item) =>
+            item.status ===
+            "Present"
+        ).length,
 
-      late: report.filter(
-        (item) =>
-          item.status === "Late"
-      ).length,
+      late:
+        report.filter(
+          (item) =>
+            item.status ===
+            "Late"
+        ).length,
 
-      leave: report.filter(
-        (item) =>
-          item.status === "Leave"
-      ).length,
+      leave:
+        report.filter(
+          (item) =>
+            item.status ===
+            "Leave"
+        ).length,
 
-      absent: report.filter(
-        (item) =>
-          item.status === "Absent"
-      ).length,
+      absent:
+        report.filter(
+          (item) =>
+            item.status ===
+            "Absent"
+        ).length,
     };
 
     return res.status(200).json({
@@ -1465,8 +1684,10 @@ const getAttendanceReport = async (
       filters: {
         branch,
         className,
-        fromDate: startDate,
-        toDate: endDate,
+        fromDate:
+          startDate,
+        toDate:
+          endDate,
       },
 
       summary,
@@ -1475,7 +1696,7 @@ const getAttendanceReport = async (
     });
   } catch (error) {
     console.error(
-      "Get Attendance Report Error:",
+      "❌ Get Attendance Report Error:",
       error
     );
 
@@ -1499,5 +1720,7 @@ module.exports = {
   markLeave,
   updateAttendance,
   deleteAttendance,
+  bulkDeleteAttendance,
   getAttendanceReport,
 };
+

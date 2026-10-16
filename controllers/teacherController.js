@@ -1,16 +1,62 @@
-// controllers/teacherController.js
 
-const bcrypt = require("bcryptjs");
 const { ObjectId } = require("mongodb");
+const crypto = require("crypto");
+const cloudinary = require("../config/cloudinary");
 
 const { getDB } = require("../config/db");
 
-const {
-  ALLOWED_BRANCHES,
-  normalizePermissions,
-  normalizeAcademicAccess,
-  normalizeAttendanceAccess,
-} = require("../utils/teacherPermissions");
+/* =========================================================
+   UPLOAD BUFFER TO CLOUDINARY
+========================================================= */
+
+const uploadToCloudinary = (
+  buffer,
+  folder = "madrasa/teachers"
+) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream =
+      cloudinary.uploader.upload_stream(
+        {
+          folder,
+          resource_type: "image",
+        },
+        (error, result) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve(result);
+        }
+      );
+
+    uploadStream.end(buffer);
+  });
+};
+
+/* =========================================================
+   DELETE CLOUDINARY IMAGE
+========================================================= */
+
+const deleteCloudinaryImage = async (
+  publicId
+) => {
+  if (!publicId) return;
+
+  try {
+    await cloudinary.uploader.destroy(
+      publicId,
+      {
+        resource_type: "image",
+      }
+    );
+  } catch (error) {
+    console.error(
+      "❌ Cloudinary delete error:",
+      error?.message || error
+    );
+  }
+};
 
 /* =========================================================
    GENERATE TEACHER ID
@@ -41,7 +87,10 @@ const generateTeacherId = async (db) => {
     ).match(/T-(\d+)/i);
 
     if (match) {
-      const number = parseInt(match[1], 10);
+      const number = parseInt(
+        match[1],
+        10
+      );
 
       if (!Number.isNaN(number)) {
         maxNumber = Math.max(
@@ -58,38 +107,23 @@ const generateTeacherId = async (db) => {
 };
 
 /* =========================================================
-   GENERATE LOGIN PASSWORD
+   GENERATE QR TOKEN
 ========================================================= */
 
-const generateTeacherPassword = () => {
-  const randomNumber = Math.floor(
-    100000 +
-      Math.random() * 900000
-  );
-
-  return String(randomNumber);
-};
-
-/* =========================================================
-   SAFE TEACHER
-========================================================= */
-
-const getSafeTeacher = (teacher) => {
-  if (!teacher) return null;
-
-  const {
-    passwordHash,
-    ...safeTeacher
-  } = teacher;
-
-  return safeTeacher;
+const generateQrToken = () => {
+  return crypto
+    .randomBytes(32)
+    .toString("hex");
 };
 
 /* =========================================================
    ADD TEACHER
 ========================================================= */
 
-const addTeacher = async (req, res) => {
+const addTeacher = async (
+  req,
+  res
+) => {
   try {
     const {
       name,
@@ -104,22 +138,16 @@ const addTeacher = async (req, res) => {
       address = "",
       status = "Active",
       note = "",
-
-      /*
-       * Optional:
-       * Normally AddTeacher.jsx does not send these.
-       * They are kept here for future compatibility.
-       */
-      permissions = {},
-      academicAccess = [],
-      attendanceAccess = [],
     } = req.body || {};
 
     /* =====================================================
        VALIDATION
     ===================================================== */
 
-    if (!name || !String(name).trim()) {
+    if (
+      !name ||
+      !String(name).trim()
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -127,30 +155,41 @@ const addTeacher = async (req, res) => {
       });
     }
 
-    if (!ALLOWED_BRANCHES.includes(branch)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid branch.",
-      });
-    }
-
     const db = getDB();
+
+    /* =====================================================
+       CLEAN BASIC DATA
+    ===================================================== */
+
+    const cleanName =
+      String(name).trim();
+
+    const cleanMobile =
+      String(
+        mobile || ""
+      ).trim();
+
+    const cleanEmail =
+      String(
+        email || ""
+      ).trim();
+
+    const cleanBranch =
+      String(
+        branch || "Main Branch"
+      ).trim();
 
     /* =====================================================
        MOBILE DUPLICATE CHECK
     ===================================================== */
-
-    const cleanMobile = String(
-      mobile || ""
-    ).trim();
 
     if (cleanMobile) {
       const existingMobile =
         await db
           .collection("teachers")
           .findOne({
-            mobile: cleanMobile,
+            mobile:
+              cleanMobile,
           });
 
       if (existingMobile) {
@@ -166,16 +205,13 @@ const addTeacher = async (req, res) => {
        EMAIL DUPLICATE CHECK
     ===================================================== */
 
-    const cleanEmail = String(
-      email || ""
-    ).trim();
-
     if (cleanEmail) {
       const existingEmail =
         await db
           .collection("teachers")
           .findOne({
-            email: cleanEmail,
+            email:
+              cleanEmail,
           });
 
       if (existingEmail) {
@@ -192,20 +228,16 @@ const addTeacher = async (req, res) => {
     ===================================================== */
 
     const teacherId =
-      await generateTeacherId(db);
+      await generateTeacherId(
+        db
+      );
 
     /* =====================================================
-       GENERATE PASSWORD
+       GENERATE QR TOKEN
     ===================================================== */
 
-    const plainPassword =
-      generateTeacherPassword();
-
-    const passwordHash =
-      await bcrypt.hash(
-        plainPassword,
-        10
-      );
+    const qrToken =
+      generateQrToken();
 
     /* =====================================================
        NORMALIZE STATUS
@@ -228,103 +260,117 @@ const addTeacher = async (req, res) => {
       salary !== null &&
       String(salary).trim() !== ""
     ) {
-      const numericSalary = Number(
-        salary
-      );
+      const numericSalary =
+        Number(salary);
 
       normalizedSalary =
-        Number.isNaN(numericSalary)
+        Number.isNaN(
+          numericSalary
+        )
           ? ""
           : numericSalary;
+    }
+
+    /* =====================================================
+       CLOUDINARY IMAGE UPLOAD
+    ===================================================== */
+
+    let image = "";
+    let imagePublicId = "";
+
+    if (
+      req.file &&
+      req.file.buffer
+    ) {
+      const uploadedImage =
+        await uploadToCloudinary(
+          req.file.buffer,
+          "madrasa/teachers"
+        );
+
+      image =
+        uploadedImage.secure_url ||
+        uploadedImage.url ||
+        "";
+
+      imagePublicId =
+        uploadedImage.public_id ||
+        "";
     }
 
     /* =====================================================
        CREATE TEACHER
     ===================================================== */
 
-    const now = new Date();
+    const now =
+      new Date();
 
     const teacher = {
       teacherId,
 
-      name: String(name).trim(),
+      qrToken,
 
-      mobile: cleanMobile,
+      name:
+        cleanName,
 
-      email: cleanEmail,
+      mobile:
+        cleanMobile,
 
-      branch,
+      email:
+        cleanEmail,
 
-      subject: String(
-        subject || ""
-      ).trim(),
+      branch:
+        cleanBranch,
 
-      designation: String(
-        designation || ""
-      ).trim(),
+      subject:
+        String(
+          subject || ""
+        ).trim(),
 
-      qualification: String(
-        qualification || ""
-      ).trim(),
+      designation:
+        String(
+          designation || ""
+        ).trim(),
 
-      salary: normalizedSalary,
+      qualification:
+        String(
+          qualification || ""
+        ).trim(),
 
-      joiningDate: String(
-        joiningDate || ""
-      ).trim(),
+      salary:
+        normalizedSalary,
 
-      address: String(
-        address || ""
-      ).trim(),
+      joiningDate:
+        String(
+          joiningDate || ""
+        ).trim(),
+
+      address:
+        String(
+          address || ""
+        ).trim(),
 
       status:
         normalizedStatus,
 
-      note: String(
-        note || ""
-      ).trim(),
+      note:
+        String(
+          note || ""
+        ).trim(),
 
-      /*
-       * Image information
-       *
-       * If your upload middleware/controller
-       * adds image later, these fields remain
-       * compatible.
-       */
-      image:
-        req.body?.image || "",
+      image,
 
-      imagePublicId:
-        req.body?.imagePublicId || "",
+      imagePublicId,
 
-      /* ===================================================
-         NEW TEACHER ACCESS SYSTEM
-      =================================================== */
+      createdAt:
+        now,
 
-      permissions:
-        normalizePermissions(
-          permissions
-        ),
-
-      academicAccess:
-        normalizeAcademicAccess(
-          academicAccess
-        ),
-
-      attendanceAccess:
-        normalizeAttendanceAccess(
-          attendanceAccess
-        ),
-
-      passwordHash,
-
-      createdAt: now,
-
-      updatedAt: now,
+      updatedAt:
+        now,
     };
 
     /* =====================================================
-       INSERT
+       INSERT TEACHER
     ===================================================== */
 
     const result =
@@ -334,7 +380,9 @@ const addTeacher = async (req, res) => {
           teacher
         );
 
-    if (!result.insertedId) {
+    if (
+      !result.insertedId
+    ) {
       return res.status(500).json({
         success: false,
         message:
@@ -350,7 +398,8 @@ const addTeacher = async (req, res) => {
       await db
         .collection("teachers")
         .findOne({
-          _id: result.insertedId,
+          _id:
+            result.insertedId,
         });
 
     /* =====================================================
@@ -364,21 +413,7 @@ const addTeacher = async (req, res) => {
         "Teacher created successfully.",
 
       teacher:
-        getSafeTeacher(
-          createdTeacher
-        ),
-
-      /*
-       * Login credentials are returned
-       * ONLY at creation time.
-       */
-      login: {
-        teacherId:
-          teacher.teacherId,
-
-        password:
-          plainPassword,
-      },
+        createdTeacher,
     });
   } catch (error) {
     console.error(
@@ -404,7 +439,8 @@ const getTeachers = async (
   res
 ) => {
   try {
-    const db = getDB();
+    const db =
+      getDB();
 
     const teachers =
       await db
@@ -415,14 +451,9 @@ const getTeachers = async (
         })
         .toArray();
 
-    const safeTeachers =
-      teachers.map(
-        getSafeTeacher
-      );
-
     return res.status(200).json({
       success: true,
-      teachers: safeTeachers,
+      teachers,
     });
   } catch (error) {
     console.error(
@@ -450,7 +481,9 @@ const getTeacherById = async (
     const { id } =
       req.params;
 
-    if (!ObjectId.isValid(id)) {
+    if (
+      !ObjectId.isValid(id)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -458,13 +491,15 @@ const getTeacherById = async (
       });
     }
 
-    const db = getDB();
+    const db =
+      getDB();
 
     const teacher =
       await db
         .collection("teachers")
         .findOne({
-          _id: new ObjectId(id),
+          _id:
+            new ObjectId(id),
         });
 
     if (!teacher) {
@@ -477,10 +512,7 @@ const getTeacherById = async (
 
     return res.status(200).json({
       success: true,
-      teacher:
-        getSafeTeacher(
-          teacher
-        ),
+      teacher,
     });
   } catch (error) {
     console.error(
@@ -508,7 +540,9 @@ const updateTeacher = async (
     const { id } =
       req.params;
 
-    if (!ObjectId.isValid(id)) {
+    if (
+      !ObjectId.isValid(id)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -529,22 +563,24 @@ const updateTeacher = async (
       address,
       status,
       note,
-
-      permissions,
-      academicAccess,
-      attendanceAccess,
-
-      image,
-      imagePublicId,
     } = req.body || {};
 
-    const db = getDB();
+    const db =
+      getDB();
+
+    const teacherObjectId =
+      new ObjectId(id);
+
+    /* =====================================================
+       FIND TEACHER
+    ===================================================== */
 
     const teacher =
       await db
         .collection("teachers")
         .findOne({
-          _id: new ObjectId(id),
+          _id:
+            teacherObjectId,
         });
 
     if (!teacher) {
@@ -561,10 +597,12 @@ const updateTeacher = async (
     };
 
     /* =====================================================
-       BASIC INFORMATION
+       NAME
     ===================================================== */
 
-    if (name !== undefined) {
+    if (
+      name !== undefined
+    ) {
       const cleanName =
         String(name).trim();
 
@@ -584,14 +622,18 @@ const updateTeacher = async (
        MOBILE
     ===================================================== */
 
-    if (mobile !== undefined) {
+    if (
+      mobile !== undefined
+    ) {
       const cleanMobile =
         String(mobile).trim();
 
       if (
         cleanMobile &&
         cleanMobile !==
-          teacher.mobile
+          String(
+            teacher.mobile || ""
+          )
       ) {
         const duplicate =
           await db
@@ -599,9 +641,10 @@ const updateTeacher = async (
             .findOne({
               mobile:
                 cleanMobile,
+
               _id: {
                 $ne:
-                  new ObjectId(id),
+                  teacherObjectId,
               },
             });
 
@@ -622,14 +665,18 @@ const updateTeacher = async (
        EMAIL
     ===================================================== */
 
-    if (email !== undefined) {
+    if (
+      email !== undefined
+    ) {
       const cleanEmail =
         String(email).trim();
 
       if (
         cleanEmail &&
         cleanEmail !==
-          teacher.email
+          String(
+            teacher.email || ""
+          )
       ) {
         const duplicate =
           await db
@@ -637,9 +684,10 @@ const updateTeacher = async (
             .findOne({
               email:
                 cleanEmail,
+
               _id: {
                 $ne:
-                  new ObjectId(id),
+                  teacherObjectId,
               },
             });
 
@@ -660,33 +708,31 @@ const updateTeacher = async (
        BRANCH
     ===================================================== */
 
-    if (branch !== undefined) {
-      if (
-        !ALLOWED_BRANCHES.includes(
-          branch
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid branch.",
-        });
-      }
-
+    if (
+      branch !== undefined
+    ) {
       updateData.branch =
-        branch;
+        String(
+          branch || ""
+        ).trim();
     }
 
     /* =====================================================
-       OTHER FIELDS
+       SUBJECT
     ===================================================== */
 
-    if (subject !== undefined) {
+    if (
+      subject !== undefined
+    ) {
       updateData.subject =
         String(
           subject || ""
         ).trim();
     }
+
+    /* =====================================================
+       DESIGNATION
+    ===================================================== */
 
     if (
       designation !==
@@ -698,6 +744,10 @@ const updateTeacher = async (
         ).trim();
     }
 
+    /* =====================================================
+       QUALIFICATION
+    ===================================================== */
+
     if (
       qualification !==
       undefined
@@ -707,6 +757,10 @@ const updateTeacher = async (
           qualification || ""
         ).trim();
     }
+
+    /* =====================================================
+       SALARY
+    ===================================================== */
 
     if (
       salary !== undefined
@@ -731,6 +785,10 @@ const updateTeacher = async (
       }
     }
 
+    /* =====================================================
+       JOINING DATE
+    ===================================================== */
+
     if (
       joiningDate !==
       undefined
@@ -741,6 +799,10 @@ const updateTeacher = async (
         ).trim();
     }
 
+    /* =====================================================
+       ADDRESS
+    ===================================================== */
+
     if (
       address !== undefined
     ) {
@@ -749,6 +811,10 @@ const updateTeacher = async (
           address || ""
         ).trim();
     }
+
+    /* =====================================================
+       NOTE
+    ===================================================== */
 
     if (
       note !== undefined
@@ -763,7 +829,9 @@ const updateTeacher = async (
        STATUS
     ===================================================== */
 
-    if (status !== undefined) {
+    if (
+      status !== undefined
+    ) {
       updateData.status =
         String(status)
           .toLowerCase() ===
@@ -773,58 +841,49 @@ const updateTeacher = async (
     }
 
     /* =====================================================
-       IMAGE
+       NEW IMAGE UPLOAD
     ===================================================== */
 
-    if (image !== undefined) {
+    if (
+      req.file &&
+      req.file.buffer
+    ) {
+      const uploadedImage =
+        await uploadToCloudinary(
+          req.file.buffer,
+          "madrasa/teachers"
+        );
+
+      const newImage =
+        uploadedImage.secure_url ||
+        uploadedImage.url ||
+        "";
+
+      const newImagePublicId =
+        uploadedImage.public_id ||
+        "";
+
+      /* -----------------------------------------------
+         DELETE OLD IMAGE
+      ------------------------------------------------ */
+
+      if (
+        teacher.imagePublicId
+      ) {
+        await deleteCloudinaryImage(
+          teacher.imagePublicId
+        );
+      }
+
       updateData.image =
-        image;
-    }
+        newImage;
 
-    if (
-      imagePublicId !==
-      undefined
-    ) {
       updateData.imagePublicId =
-        imagePublicId;
+        newImagePublicId;
     }
 
     /* =====================================================
-       ACCESS SYSTEM
-    ===================================================== */
-
-    if (
-      permissions !==
-      undefined
-    ) {
-      updateData.permissions =
-        normalizePermissions(
-          permissions
-        );
-    }
-
-    if (
-      academicAccess !==
-      undefined
-    ) {
-      updateData.academicAccess =
-        normalizeAcademicAccess(
-          academicAccess
-        );
-    }
-
-    if (
-      attendanceAccess !==
-      undefined
-    ) {
-      updateData.attendanceAccess =
-        normalizeAttendanceAccess(
-          attendanceAccess
-        );
-    }
-
-    /* =====================================================
-       UPDATE
+       UPDATE DATABASE
     ===================================================== */
 
     const result =
@@ -833,7 +892,7 @@ const updateTeacher = async (
         .updateOne(
           {
             _id:
-              new ObjectId(id),
+              teacherObjectId,
           },
           {
             $set:
@@ -841,7 +900,9 @@ const updateTeacher = async (
           }
         );
 
-    if (!result.matchedCount) {
+    if (
+      !result.matchedCount
+    ) {
       return res.status(404).json({
         success: false,
         message:
@@ -849,23 +910,26 @@ const updateTeacher = async (
       });
     }
 
+    /* =====================================================
+       GET UPDATED TEACHER
+    ===================================================== */
+
     const updatedTeacher =
       await db
         .collection("teachers")
         .findOne({
           _id:
-            new ObjectId(id),
+            teacherObjectId,
         });
 
     return res.status(200).json({
       success: true,
+
       message:
         "Teacher updated successfully.",
 
       teacher:
-        getSafeTeacher(
-          updatedTeacher
-        ),
+        updatedTeacher,
     });
   } catch (error) {
     console.error(
@@ -883,6 +947,220 @@ const updateTeacher = async (
 };
 
 /* =========================================================
+   REGENERATE TEACHER QR TOKEN
+========================================================= */
+
+const regenerateTeacherQr = async (
+  req,
+  res
+) => {
+  try {
+    const { id } =
+      req.params;
+
+    if (
+      !ObjectId.isValid(id)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid teacher ID.",
+      });
+    }
+
+    const db =
+      getDB();
+
+    const teacherObjectId =
+      new ObjectId(id);
+
+    const teacher =
+      await db
+        .collection("teachers")
+        .findOne({
+          _id:
+            teacherObjectId,
+        });
+
+    if (!teacher) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Teacher not found.",
+      });
+    }
+
+    const qrToken =
+      generateQrToken();
+
+    await db
+      .collection("teachers")
+      .updateOne(
+        {
+          _id:
+            teacherObjectId,
+        },
+        {
+          $set: {
+            qrToken,
+
+            updatedAt:
+              new Date(),
+          },
+        }
+      );
+
+    const updatedTeacher =
+      await db
+        .collection("teachers")
+        .findOne({
+          _id:
+            teacherObjectId,
+        });
+
+    return res.status(200).json({
+      success: true,
+
+      message:
+        "Teacher QR regenerated successfully.",
+
+      teacher:
+        updatedTeacher,
+    });
+  } catch (error) {
+    console.error(
+      "❌ regenerateTeacherQr error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to regenerate teacher QR.",
+    });
+  }
+};
+
+/* =========================================================
+   GENERATE QR FOR OLD TEACHER
+========================================================= */
+
+const generateMissingTeacherQr =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      const { id } =
+        req.params;
+
+      if (
+        !ObjectId.isValid(id)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid teacher ID.",
+        });
+      }
+
+      const db =
+        getDB();
+
+      const teacherObjectId =
+        new ObjectId(id);
+
+      const teacher =
+        await db
+          .collection("teachers")
+          .findOne({
+            _id:
+              teacherObjectId,
+          });
+
+      if (!teacher) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Teacher not found.",
+        });
+      }
+
+      /* -------------------------------------------------
+         ALREADY HAS QR
+      ------------------------------------------------- */
+
+      if (teacher.qrToken) {
+        return res.status(200).json({
+          success: true,
+
+          alreadyExists:
+            true,
+
+          message:
+            "Teacher QR token already exists.",
+
+          teacher,
+        });
+      }
+
+      /* -------------------------------------------------
+         CREATE TOKEN
+      ------------------------------------------------- */
+
+      const qrToken =
+        generateQrToken();
+
+      await db
+        .collection("teachers")
+        .updateOne(
+          {
+            _id:
+              teacherObjectId,
+          },
+          {
+            $set: {
+              qrToken,
+
+              updatedAt:
+                new Date(),
+            },
+          }
+        );
+
+      const updatedTeacher =
+        await db
+          .collection("teachers")
+          .findOne({
+            _id:
+              teacherObjectId,
+          });
+
+      return res.status(200).json({
+        success: true,
+
+        message:
+          "Teacher QR token generated successfully.",
+
+        teacher:
+          updatedTeacher,
+      });
+    } catch (error) {
+      console.error(
+        "❌ generateMissingTeacherQr error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "Failed to generate teacher QR token.",
+      });
+    }
+  };
+
+/* =========================================================
    DELETE TEACHER
 ========================================================= */
 
@@ -894,7 +1172,9 @@ const deleteTeacher = async (
     const { id } =
       req.params;
 
-    if (!ObjectId.isValid(id)) {
+    if (
+      !ObjectId.isValid(id)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -902,17 +1182,55 @@ const deleteTeacher = async (
       });
     }
 
-    const db = getDB();
+    const db =
+      getDB();
+
+    const teacherObjectId =
+      new ObjectId(id);
+
+    const teacher =
+      await db
+        .collection("teachers")
+        .findOne({
+          _id:
+            teacherObjectId,
+        });
+
+    if (!teacher) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Teacher not found.",
+      });
+    }
+
+    /* =====================================================
+       DELETE CLOUDINARY IMAGE
+    ===================================================== */
+
+    if (
+      teacher.imagePublicId
+    ) {
+      await deleteCloudinaryImage(
+        teacher.imagePublicId
+      );
+    }
+
+    /* =====================================================
+       DELETE TEACHER
+    ===================================================== */
 
     const result =
       await db
         .collection("teachers")
         .deleteOne({
           _id:
-            new ObjectId(id),
+            teacherObjectId,
         });
 
-    if (!result.deletedCount) {
+    if (
+      !result.deletedCount
+    ) {
       return res.status(404).json({
         success: false,
         message:
@@ -922,6 +1240,7 @@ const deleteTeacher = async (
 
     return res.status(200).json({
       success: true,
+
       message:
         "Teacher deleted successfully.",
     });
@@ -933,103 +1252,9 @@ const deleteTeacher = async (
 
     return res.status(500).json({
       success: false,
+
       message:
         "Failed to delete teacher.",
-    });
-  }
-};
-
-/* =========================================================
-   RESET TEACHER PASSWORD
-========================================================= */
-
-const resetTeacherPassword = async (
-  req,
-  res
-) => {
-  try {
-    const { id } =
-      req.params;
-
-    const {
-      password,
-    } = req.body || {};
-
-    if (!ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid teacher ID.",
-      });
-    }
-
-    if (!password) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "New password is required.",
-      });
-    }
-
-    if (
-      String(password).length <
-      4
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Password must be at least 4 characters.",
-      });
-    }
-
-    const db = getDB();
-
-    const passwordHash =
-      await bcrypt.hash(
-        String(password),
-        10
-      );
-
-    const result =
-      await db
-        .collection("teachers")
-        .updateOne(
-          {
-            _id:
-              new ObjectId(id),
-          },
-          {
-            $set: {
-              passwordHash,
-              updatedAt:
-                new Date(),
-            },
-          }
-        );
-
-    if (!result.matchedCount) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Teacher not found.",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message:
-        "Teacher password reset successfully.",
-    });
-  } catch (error) {
-    console.error(
-      "❌ resetTeacherPassword error:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Failed to reset teacher password.",
     });
   }
 };
@@ -1043,6 +1268,8 @@ module.exports = {
   getTeachers,
   getTeacherById,
   updateTeacher,
+  regenerateTeacherQr,
+  generateMissingTeacherQr,
   deleteTeacher,
-  resetTeacherPassword,
 };
+

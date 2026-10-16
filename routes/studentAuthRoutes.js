@@ -3,51 +3,61 @@ const express = require("express");
 const router = express.Router();
 
 const {
-  studentLogin,
-  getStudentMe,
-  getStudentFees,
-  getStudentResults,
+studentLogin,
+getStudentMe,
+getStudentFees,
+getStudentResults,
+getStudentAttendance,
 } = require("../controllers/studentAuthController");
 
 const studentAuthMiddleware = require("../middleware/studentAuthMiddleware");
 
 /* =========================================================
-   STUDENT LOGIN
+STUDENT LOGIN
 ========================================================= */
 
-router.post(
-  "/login",
-  studentLogin
-);
+router.post("/login", studentLogin);
 
 /* =========================================================
-   CURRENT STUDENT PROFILE
+STUDENT ATTENDANCE
+IMPORTANT:
+This route must come before /:id routes.
 ========================================================= */
 
 router.get(
-  "/me",
-  studentAuthMiddleware,
-  getStudentMe
+"/attendance",
+studentAuthMiddleware,
+getStudentAttendance
 );
 
 /* =========================================================
-   CURRENT STUDENT FEES
+STUDENT PROFILE
 ========================================================= */
 
 router.get(
-  "/:id/fees",
-  studentAuthMiddleware,
-  getStudentFees
+"/me",
+studentAuthMiddleware,
+getStudentMe
 );
 
 /* =========================================================
-   CURRENT STUDENT RESULTS
+STUDENT FEES
 ========================================================= */
 
 router.get(
-  "/:id/results",
-  studentAuthMiddleware,
-  getStudentResults
+"/:id/fees",
+studentAuthMiddleware,
+getStudentFees
+);
+
+/* =========================================================
+STUDENT RESULTS
+========================================================= */
+
+router.get(
+"/:id/results",
+studentAuthMiddleware,
+getStudentResults
 );
 
 module.exports = router;

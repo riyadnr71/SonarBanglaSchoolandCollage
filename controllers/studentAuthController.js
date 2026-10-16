@@ -5,6 +5,7 @@ const { getDB } = require("../config/db");
 
 /* =========================================================
    STUDENT LOGIN
+   
 ========================================================= */
 
 const studentLogin = async (req, res) => {
@@ -105,6 +106,388 @@ const studentLogin = async (req, res) => {
     });
   }
 };
+
+
+const getStudentAttendance = async (req, res) => {
+try {
+const db = getDB();
+
+
+const studentMongoId = req.student?.studentId;
+
+if (
+  !studentMongoId ||
+  !ObjectId.isValid(studentMongoId)
+) {
+  return res.status(401).json({
+    success: false,
+    message: "Student authentication is invalid.",
+  });
+}
+
+const student = await db
+  .collection("students")
+  .findOne({
+    _id: new ObjectId(studentMongoId),
+  });
+
+if (!student) {
+  return res.status(404).json({
+    success: false,
+    message: "Student not found.",
+  });
+}
+
+/* =====================================================
+   GET TODAY DATE — ASIA/DHAKA
+===================================================== */
+
+const getTodayDate = () => {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dhaka",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+};
+
+/* =====================================================
+   GET ATTENDANCE SETTINGS
+===================================================== */
+
+const settings =
+  await db
+    .collection("attendanceSettings")
+    .findOne({});
+
+const attendanceStartTime =
+  settings?.attendanceStartTime || "08:00";
+
+const absentAfterTime =
+  settings?.absentAfterTime || "09:00";
+
+/* =====================================================
+   CURRENT DATE
+===================================================== */
+
+const today = getTodayDate();
+
+/* =====================================================
+   GET ALL ATTENDANCE RECORDS
+===================================================== */
+
+const attendance =
+  await db
+    .collection("attendance")
+    .find({
+      studentId: student._id,
+      date: {
+        $lte: today,
+      },
+    })
+    .sort({
+      date: -1,
+    })
+    .toArray();
+
+/* =====================================================
+   GENERATE DATE RANGE
+
+   এখানে শিক্ষার্থী ভর্তি হওয়ার তারিখ থেকে
+   আজ পর্যন্ত হিসাব করা হবে।
+===================================================== */
+
+const startDateValue =
+  student.admissionDate ||
+  student.createdAt ||
+  today;
+
+const startDate = new Date(
+  `${String(startDateValue).slice(0, 10)}T00:00:00`
+);
+
+const endDate = new Date(
+  `${today}T00:00:00`
+);
+
+const dateList = [];
+
+if (
+  !Number.isNaN(startDate.getTime()) &&
+  !Number.isNaN(endDate.getTime())
+) {
+  const current = new Date(startDate);
+
+  while (current <= endDate) {
+    const year =
+      current.getFullYear();
+
+    const month =
+      String(
+        current.getMonth() + 1
+      ).padStart(2, "0");
+
+    const day =
+      String(
+        current.getDate()
+      ).padStart(2, "0");
+
+    dateList.push(
+      `${year}-${month}-${day}`
+    );
+
+    current.setDate(
+      current.getDate() + 1
+    );
+  }
+}
+
+/* =====================================================
+   ATTENDANCE MAP
+===================================================== */
+
+const attendanceMap =
+  new Map();
+
+attendance.forEach((record) => {
+  attendanceMap.set(
+    String(record.date),
+    record
+  );
+});
+
+/* =====================================================
+   BUILD DATE-WISE ATTENDANCE
+
+   Database-এ record না থাকলে:
+   → Absent
+
+   তবে আজকের দিন যদি এখনও
+   attendanceStartTime-এর আগে হয়,
+   তখন Absent দেখানো হবে না।
+===================================================== */
+
+const todayTime = new Intl.DateTimeFormat(
+  "en-GB",
+  {
+    timeZone: "Asia/Dhaka",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }
+).format(new Date());
+
+const todayMinutes =
+  Number(todayTime.split(":")[0]) * 60 +
+  Number(todayTime.split(":")[1]);
+
+const absentAfterMinutes =
+  Number(
+    String(absentAfterTime).split(":")[0]
+  ) *
+    60 +
+  Number(
+    String(absentAfterTime).split(":")[1]
+  );
+
+const generatedAttendance =
+  dateList.map((date) => {
+    const existing =
+      attendanceMap.get(date);
+
+    /* -----------------------------------------------
+       EXISTING RECORD
+    ------------------------------------------------ */
+
+    if (existing) {
+      return existing;
+    }
+
+    /* -----------------------------------------------
+       TODAY BEFORE ABSENT CUTOFF
+
+       এখনো Absent হওয়ার সময় হয়নি।
+    ------------------------------------------------ */
+
+    if (
+      date === today &&
+      todayMinutes <
+        absentAfterMinutes
+    ) {
+      return {
+        _id: `virtual-${date}`,
+        studentId: student._id,
+        studentIdCard:
+          student.idCard || "",
+        studentName:
+          student.name || "",
+        branch:
+          student.branch ||
+          "Main Branch",
+        className:
+          student.className || "",
+        section:
+          student.section || "",
+        date,
+        entryTime: null,
+        exitTime: null,
+        status: "Pending",
+        leaveReason: "",
+        virtual: true,
+      };
+    }
+
+    /* -----------------------------------------------
+       NO RECORD = ABSENT
+    ------------------------------------------------ */
+
+    return {
+      _id: `virtual-${date}`,
+      studentId: student._id,
+      studentIdCard:
+        student.idCard || "",
+      studentName:
+        student.name || "",
+      branch:
+        student.branch ||
+        "Main Branch",
+      className:
+        student.className || "",
+      section:
+        student.section || "",
+      date,
+      entryTime: null,
+      exitTime: null,
+      status: "Absent",
+      leaveReason: "",
+      virtual: true,
+    };
+  });
+
+/* =====================================================
+   REMOVE FUTURE / PENDING IF NEEDED
+===================================================== */
+
+const finalAttendance =
+  generatedAttendance
+    .filter((item) => {
+      if (
+        item.status === "Pending"
+      ) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) =>
+      String(b.date).localeCompare(
+        String(a.date)
+      )
+    );
+
+/* =====================================================
+   SUMMARY
+===================================================== */
+
+const summary = {
+  total: finalAttendance.length,
+
+  present:
+    finalAttendance.filter(
+      (item) =>
+        item.status ===
+        "Present"
+    ).length,
+
+  late:
+    finalAttendance.filter(
+      (item) =>
+        item.status ===
+        "Late"
+    ).length,
+
+  leave:
+    finalAttendance.filter(
+      (item) =>
+        item.status ===
+        "Leave"
+    ).length,
+
+  absent:
+    finalAttendance.filter(
+      (item) =>
+        item.status ===
+        "Absent"
+    ).length,
+};
+
+const attendanceDays =
+  summary.present +
+  summary.late +
+  summary.leave +
+  summary.absent;
+
+const attendedDays =
+  summary.present +
+  summary.late;
+
+summary.percentage =
+  attendanceDays > 0
+    ? Math.round(
+        (attendedDays /
+          attendanceDays) *
+          100
+      )
+    : 0;
+
+return res.status(200).json({
+  success: true,
+
+  student: {
+    _id: student._id,
+    name: student.name,
+    idCard: student.idCard,
+    roll: student.roll,
+    branch:
+      student.branch ||
+      "Main Branch",
+    className:
+      student.className,
+    section:
+      student.section,
+  },
+
+  settings: {
+    attendanceStartTime,
+    absentAfterTime,
+    lateAllowed:
+      settings?.lateAllowed !== false,
+  },
+
+  summary,
+
+  attendance: finalAttendance,
+});
+
+
+} catch (error) {
+console.error(
+"Get Student Attendance Error:",
+error
+);
+
+
+return res.status(500).json({
+  success: false,
+  message:
+    "Failed to load student attendance.",
+});
+
+
+}
+};
+
 
 /* =========================================================
    GET CURRENT STUDENT
@@ -440,4 +823,5 @@ module.exports = {
   getStudentMe,
   getStudentFees,
   getStudentResults,
+  getStudentAttendance,
 };

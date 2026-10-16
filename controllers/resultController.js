@@ -36,6 +36,254 @@ const calculateGPA = (grade) => {
   return gradePoints[grade] ?? 0;
 };
 
+
+
+/* =========================================================
+   TEACHER RESULT ACCESS HELPERS
+========================================================= */
+
+const isTeacherRequest = (req) => {
+  return req.teacher || req.teacherData;
+};
+
+const getTeacherData = (req) => {
+  return req.teacherData || {};
+};
+
+/* =========================================================
+   CHECK RESULT PERMISSION
+========================================================= */
+
+const hasResultPermission = (
+  req,
+  action
+) => {
+  if (!isTeacherRequest(req)) {
+    return true;
+  }
+
+  const teacher =
+    getTeacherData(req);
+
+  return (
+    teacher.permissions?.results?.[
+      action
+    ] === true
+  );
+};
+
+/* =========================================================
+   CHECK ACADEMIC RESULT ACCESS
+========================================================= */
+
+const teacherCanAccessResult = (
+  req,
+  student,
+  subjectNames = []
+) => {
+  if (!isTeacherRequest(req)) {
+    return true;
+  }
+
+  const teacher =
+    getTeacherData(req);
+
+  const accessList =
+    Array.isArray(
+      teacher.academicAccess
+    )
+      ? teacher.academicAccess
+      : [];
+
+  if (!accessList.length) {
+    return false;
+  }
+
+  const studentBranch =
+    String(
+      student.branch || ""
+    ).trim();
+
+  const studentClass =
+    String(
+      student.className || ""
+    ).trim();
+
+  const studentSection =
+    String(
+      student.section || ""
+    ).trim();
+
+  return accessList.some(
+    (access) => {
+      const accessBranch =
+        String(
+          access.branch || ""
+        ).trim();
+
+      const accessClass =
+        String(
+          access.className || ""
+        ).trim();
+
+      const accessSection =
+        String(
+          access.section || ""
+        ).trim();
+
+      /* -----------------------------------------
+         BRANCH
+      ----------------------------------------- */
+
+      if (
+        accessBranch !==
+        studentBranch
+      ) {
+        return false;
+      }
+
+      /* -----------------------------------------
+         CLASS
+      ----------------------------------------- */
+
+      if (
+        accessClass !==
+        studentClass
+      ) {
+        return false;
+      }
+
+      /* -----------------------------------------
+         SECTION
+         Blank = all sections
+      ----------------------------------------- */
+
+      if (
+        accessSection &&
+        accessSection !==
+          studentSection
+      ) {
+        return false;
+      }
+
+      /* -----------------------------------------
+         SUBJECT
+      ----------------------------------------- */
+
+      const allowedSubjects =
+        Array.isArray(
+          access.subjects
+        )
+          ? access.subjects
+          : [];
+
+      if (
+        !allowedSubjects.length
+      ) {
+        return false;
+      }
+
+      return subjectNames.every(
+        (subjectName) =>
+          allowedSubjects.includes(
+            String(
+              subjectName || ""
+            ).trim()
+          )
+      );
+    }
+  );
+};
+
+/* =========================================================
+   GET TEACHER ACCESSIBLE SUBJECT NAMES
+========================================================= */
+
+const getTeacherAllowedSubjects = (
+  req,
+  student
+) => {
+  if (!isTeacherRequest(req)) {
+    return null;
+  }
+
+  const teacher =
+    getTeacherData(req);
+
+  const accessList =
+    Array.isArray(
+      teacher.academicAccess
+    )
+      ? teacher.academicAccess
+      : [];
+
+  const allowed = new Set();
+
+  accessList.forEach(
+    (access) => {
+      const branch =
+        String(
+          access.branch || ""
+        ).trim();
+
+      const className =
+        String(
+          access.className || ""
+        ).trim();
+
+      const section =
+        String(
+          access.section || ""
+        ).trim();
+
+      if (
+        branch !==
+        String(
+          student.branch || ""
+        ).trim()
+      ) {
+        return;
+      }
+
+      if (
+        className !==
+        String(
+          student.className || ""
+        ).trim()
+      ) {
+        return;
+      }
+
+      if (
+        section &&
+        section !==
+          String(
+            student.section || ""
+          ).trim()
+      ) {
+        return;
+      }
+
+      if (
+        Array.isArray(
+          access.subjects
+        )
+      ) {
+        access.subjects.forEach(
+          (subject) =>
+            allowed.add(
+              String(
+                subject
+              ).trim()
+            )
+        );
+      }
+    }
+  );
+
+  return [...allowed];
+};
+
 /* =========================================================
    GET STUDENT PHOTO
    নতুন + পুরনো result দুই ক্ষেত্রেই কাজ করবে

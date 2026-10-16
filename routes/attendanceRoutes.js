@@ -1,6 +1,5 @@
-const express = require("express");
 
-const router = express.Router();
+const express = require("express");
 
 const {
   scanAttendance,
@@ -15,128 +14,67 @@ const {
 
 const authMiddleware = require("../middleware/authMiddleware");
 
-const teacherAuthMiddleware = require("../middleware/teacherAuthMiddleware");
-
-const {
-  teacherAttendanceAccess,
-  teacherAttendanceView,
-} = require("../middleware/attendanceMiddleware");
+const router = express.Router();
 
 /* =========================================================
-   ADMIN
+   ADMIN ATTENDANCE
 ========================================================= */
 
-/* SCAN */
-
+// Scan attendance
 router.post(
   "/admin/scan",
   authMiddleware,
   scanAttendance
 );
 
-/* TODAY */
-
+// Today's attendance
 router.get(
   "/admin/today",
   authMiddleware,
   getTodayAttendance
 );
 
-/* REPORT */
-
-router.get(
-  "/admin/report",
-  authMiddleware,
-  getAttendanceReport
-);
-
-/* STUDENT */
-
+// Student attendance
 router.get(
   "/admin/student/:studentId",
   authMiddleware,
   getStudentAttendance
 );
 
-/* CLASS */
-
+// Class attendance
 router.get(
   "/admin/class/:className",
   authMiddleware,
   getClassAttendance
 );
 
-/* LEAVE */
-
+// Mark leave
 router.post(
   "/admin/leave",
   authMiddleware,
   markLeave
 );
 
-/* UPDATE */
-
+// Update attendance
 router.put(
   "/admin/:id",
   authMiddleware,
   updateAttendance
 );
 
-/* DELETE */
-
+// Delete attendance
 router.delete(
   "/admin/:id",
   authMiddleware,
   deleteAttendance
 );
 
-/* =========================================================
-   TEACHER
-========================================================= */
-
-/* SCAN */
-
-router.post(
-  "/teacher/scan",
-  teacherAuthMiddleware,
-  teacherAttendanceAccess,
-  scanAttendance
-);
-
-/* TODAY */
-
+// Attendance report
 router.get(
-  "/teacher/today",
-  teacherAuthMiddleware,
-  teacherAttendanceView,
-  getTodayAttendance
-);
-
-/* REPORT */
-
-router.get(
-  "/teacher/report",
-  teacherAuthMiddleware,
-  teacherAttendanceView,
+  "/admin/report",
+  authMiddleware,
   getAttendanceReport
 );
 
-/* STUDENT */
-
-router.get(
-  "/teacher/student/:studentId",
-  teacherAuthMiddleware,
-  teacherAttendanceView,
-  getStudentAttendance
-);
-
-/* CLASS */
-
-router.get(
-  "/teacher/class/:className",
-  teacherAuthMiddleware,
-  teacherAttendanceView,
-  getClassAttendance
-);
-
 module.exports = router;
+

@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -35,12 +36,10 @@ const feeSetupRoutes = require("./routes/feeSetupRoutes");
 // TEACHERS
 const teacherRoutes = require("./routes/teacherRoutes");
 
-// TEACHER AUTH
-const teacherAuthRoutes = require("./routes/teacherAuthRoutes");
-
-// TEACHER ACCESS
-const teacherAccessRoutes = require("./routes/teacherAccessRoutes");
-
+// TEACHER ATTENDANCE
+const teacherAttendanceRoutes = require("./routes/teacherAttendanceRoutes");
+// teacher Public routes
+const publicTeacherRoutes = require("./routes/publicTeacherRoutes");
 // EXPENSES
 const expenseRoutes = require("./routes/expenseRoutes");
 
@@ -73,33 +72,14 @@ const app = express();
 // ROUTE TYPE CHECK
 // =========================================================
 
-console.log("");
-console.log("========================================");
-console.log("🔍 ROUTE TYPE CHECK");
-console.log("========================================");
-
-console.log("AUTH:", typeof authRoutes);
-console.log("DASHBOARD:", typeof dashboardRoutes);
-console.log("STUDENT AUTH:", typeof studentAuthRoutes);
-console.log("TEACHER AUTH:", typeof teacherAuthRoutes);
-console.log("TEACHER ACCESS:", typeof teacherAccessRoutes);
-console.log("REPORTS:", typeof reportRoutes);
-console.log("STUDENTS:", typeof studentRoutes);
-console.log("SUBJECTS:", typeof subjectRoutes);
-console.log("RESULTS:", typeof resultRoutes);
-console.log("PUBLIC RESULT:", typeof publicResultRoutes);
-console.log("PUBLIC IMAGE:", typeof publicImageRoutes);
-console.log("FEES:", typeof feeRoutes);
-console.log("FEE SETUP:", typeof feeSetupRoutes);
-console.log("TEACHERS:", typeof teacherRoutes);
-console.log("EXPENSES:", typeof expenseRoutes);
-console.log("NOTICES:", typeof noticeRoutes);
-console.log("PUBLIC NOTICES:", typeof publicNoticeRoutes);
-console.log("SEAT PLAN:", typeof seatPlanRoutes);
-console.log("ATTENDANCE:", typeof attendanceRoutes);
 console.log(
   "ATTENDANCE SETTINGS:",
   typeof attendanceSettingsRoutes
+);
+
+console.log(
+  "TEACHER ATTENDANCE:",
+  typeof teacherAttendanceRoutes
 );
 
 console.log("========================================");
@@ -132,6 +112,10 @@ app.use(
     extended: true,
   })
 );
+
+
+// Teacher Public Routes
+app.use("/api/public-teachers", publicTeacherRoutes);
 
 // =========================================================
 // HEALTH CHECK
@@ -192,36 +176,10 @@ app.use(
 console.log("✅ STUDENT AUTH mounted successfully");
 
 // =========================================================
-// TEACHER AUTH
-// =========================================================
-
-console.log("4️⃣ Mounting TEACHER AUTH...");
-
-app.use(
-  "/api/teacher-auth",
-  teacherAuthRoutes
-);
-
-console.log("✅ TEACHER AUTH mounted successfully");
-
-// =========================================================
-// TEACHER ACCESS
-// =========================================================
-
-console.log("5️⃣ Mounting TEACHER ACCESS...");
-
-app.use(
-  "/api/teacher-access",
-  teacherAccessRoutes
-);
-
-console.log("✅ TEACHER ACCESS mounted successfully");
-
-// =========================================================
 // REPORTS
 // =========================================================
 
-console.log("6️⃣ Mounting REPORTS...");
+console.log("4️⃣ Mounting REPORTS...");
 
 app.use(
   "/api/reports",
@@ -234,7 +192,7 @@ console.log("✅ REPORTS mounted successfully");
 // STUDENTS
 // =========================================================
 
-console.log("7️⃣ Mounting STUDENTS...");
+console.log("5️⃣ Mounting STUDENTS...");
 
 app.use(
   "/api/students",
@@ -247,7 +205,7 @@ console.log("✅ STUDENTS mounted successfully");
 // SUBJECTS
 // =========================================================
 
-console.log("8️⃣ Mounting SUBJECTS...");
+console.log("6️⃣ Mounting SUBJECTS...");
 
 app.use(
   "/api/subjects",
@@ -260,7 +218,7 @@ console.log("✅ SUBJECTS mounted successfully");
 // RESULTS
 // =========================================================
 
-console.log("9️⃣ Mounting RESULTS...");
+console.log("7️⃣ Mounting RESULTS...");
 
 app.use(
   "/api/results",
@@ -273,7 +231,7 @@ console.log("✅ RESULTS mounted successfully");
 // PUBLIC RESULT
 // =========================================================
 
-console.log("🔟 Mounting PUBLIC RESULT...");
+console.log("8️⃣ Mounting PUBLIC RESULT...");
 
 app.use(
   "/api/public-result",
@@ -286,7 +244,7 @@ console.log("✅ PUBLIC RESULT mounted successfully");
 // PUBLIC IMAGE
 // =========================================================
 
-console.log("1️⃣1️⃣ Mounting PUBLIC IMAGE...");
+console.log("9️⃣ Mounting PUBLIC IMAGE...");
 
 app.use(
   "/api/public-image",
@@ -299,7 +257,7 @@ console.log("✅ PUBLIC IMAGE mounted successfully");
 // FEES
 // =========================================================
 
-console.log("1️⃣2️⃣ Mounting FEES...");
+console.log("🔟 Mounting FEES...");
 
 app.use(
   "/api/fees",
@@ -312,7 +270,7 @@ console.log("✅ FEES mounted successfully");
 // FEE SETUP
 // =========================================================
 
-console.log("1️⃣3️⃣ Mounting FEE SETUP...");
+console.log("1️⃣1️⃣ Mounting FEE SETUP...");
 
 app.use(
   "/api/fee-setups",
@@ -325,7 +283,7 @@ console.log("✅ FEE SETUP mounted successfully");
 // TEACHERS
 // =========================================================
 
-console.log("1️⃣4️⃣ Mounting TEACHERS...");
+console.log("1️⃣2️⃣ Mounting TEACHERS...");
 
 app.use(
   "/api/teachers",
@@ -335,10 +293,25 @@ app.use(
 console.log("✅ TEACHERS mounted successfully");
 
 // =========================================================
+// TEACHER ATTENDANCE
+// =========================================================
+
+console.log("1️⃣3️⃣ Mounting TEACHER ATTENDANCE...");
+
+app.use(
+  "/api/teacher-attendance",
+  teacherAttendanceRoutes
+);
+
+console.log(
+  "✅ TEACHER ATTENDANCE mounted successfully"
+);
+
+// =========================================================
 // EXPENSES
 // =========================================================
 
-console.log("1️⃣5️⃣ Mounting EXPENSES...");
+console.log("1️⃣4️⃣ Mounting EXPENSES...");
 
 app.use(
   "/api/expenses",
@@ -351,7 +324,7 @@ console.log("✅ EXPENSES mounted successfully");
 // NOTICES
 // =========================================================
 
-console.log("1️⃣6️⃣ Mounting NOTICES...");
+console.log("1️⃣5️⃣ Mounting NOTICES...");
 
 app.use(
   "/api/notices",
@@ -364,7 +337,7 @@ console.log("✅ NOTICES mounted successfully");
 // PUBLIC NOTICES
 // =========================================================
 
-console.log("1️⃣7️⃣ Mounting PUBLIC NOTICES...");
+console.log("1️⃣6️⃣ Mounting PUBLIC NOTICES...");
 
 app.use(
   "/api/public-notices",
@@ -377,7 +350,7 @@ console.log("✅ PUBLIC NOTICES mounted successfully");
 // SEAT PLAN
 // =========================================================
 
-console.log("1️⃣8️⃣ Mounting SEAT PLAN...");
+console.log("1️⃣7️⃣ Mounting SEAT PLAN...");
 
 app.use(
   "/api/seat-plan",
@@ -387,23 +360,23 @@ app.use(
 console.log("✅ SEAT PLAN mounted successfully");
 
 // =========================================================
-// ATTENDANCE
+// STUDENT ATTENDANCE
 // =========================================================
 
-console.log("1️⃣9️⃣ Mounting ATTENDANCE...");
+console.log("1️⃣8️⃣ Mounting STUDENT ATTENDANCE...");
 
 app.use(
   "/api/attendance",
   attendanceRoutes
 );
 
-console.log("✅ ATTENDANCE mounted successfully");
+console.log("✅ STUDENT ATTENDANCE mounted successfully");
 
 // =========================================================
 // ATTENDANCE SETTINGS
 // =========================================================
 
-console.log("2️⃣0️⃣ Mounting ATTENDANCE SETTINGS...");
+console.log("1️⃣9️⃣ Mounting ATTENDANCE SETTINGS...");
 
 app.use(
   "/api/attendance-settings",
@@ -488,7 +461,8 @@ app.use(
       success: false,
       message:
         "Internal server error",
-      error: error.message,
+      error:
+        error.message,
     });
   }
 );
@@ -600,51 +574,63 @@ const startServer = async () => {
         );
 
         // -------------------------------------------------
-        // TEACHER AUTH
+        // TEACHERS
         // -------------------------------------------------
 
         console.log("");
 
         console.log(
-          "👨‍🏫 Teacher Auth:"
+          "👨‍🏫 Teachers:"
         );
 
         console.log(
-          `   Login: http://localhost:${PORT}/api/teacher-auth/login`
+          `   All:    http://localhost:${PORT}/api/teachers`
         );
 
         console.log(
-          `   Me:    http://localhost:${PORT}/api/teacher-auth/me`
+          `   Single: http://localhost:${PORT}/api/teachers/:id`
+        );
+
+        console.log(
+          `   Add:    http://localhost:${PORT}/api/teachers`
+        );
+
+        console.log(
+          `   Update: http://localhost:${PORT}/api/teachers/:id`
+        );
+
+        console.log(
+          `   Delete: http://localhost:${PORT}/api/teachers/:id`
+        );
+
+        console.log(
+          `   Generate QR:    http://localhost:${PORT}/api/teachers/:id/generate-qr`
+        );
+
+        console.log(
+          `   Regenerate QR:  http://localhost:${PORT}/api/teachers/:id/regenerate-qr`
         );
 
         // -------------------------------------------------
-        // TEACHER ACCESS
+        // TEACHER ATTENDANCE
         // -------------------------------------------------
 
         console.log("");
 
         console.log(
-          "🔐 Teacher Access:"
+          "📷 Teacher Attendance:"
         );
 
         console.log(
-          `   Get:             http://localhost:${PORT}/api/teacher-access/:id`
+          `   Scan:    http://localhost:${PORT}/api/teacher-attendance/scan`
         );
 
         console.log(
-          `   Permissions:     http://localhost:${PORT}/api/teacher-access/:id/permissions`
+          `   Today:   http://localhost:${PORT}/api/teacher-attendance/today`
         );
 
         console.log(
-          `   Academic Access: http://localhost:${PORT}/api/teacher-access/:id/academic-access`
-        );
-
-        console.log(
-          `   Attendance:      http://localhost:${PORT}/api/teacher-access/:id/attendance-access`
-        );
-
-        console.log(
-          `   Full Access:     http://localhost:${PORT}/api/teacher-access/:id/full-access`
+          `   History: http://localhost:${PORT}/api/teacher-attendance/history`
         );
 
         // -------------------------------------------------
@@ -690,21 +676,31 @@ const startServer = async () => {
         );
 
         // -------------------------------------------------
-        // ATTENDANCE
+        // STUDENT ATTENDANCE
         // -------------------------------------------------
 
         console.log("");
 
         console.log(
-          "📷 Attendance:"
+          "📚 Student Attendance:"
         );
 
         console.log(
           `   http://localhost:${PORT}/api/attendance`
         );
 
+        // -------------------------------------------------
+        // ATTENDANCE SETTINGS
+        // -------------------------------------------------
+
+        console.log("");
+
         console.log(
-          `   Settings: http://localhost:${PORT}/api/attendance-settings`
+          "⚙️ Attendance Settings:"
+        );
+
+        console.log(
+          `   http://localhost:${PORT}/api/attendance-settings`
         );
 
         // -------------------------------------------------
@@ -743,3 +739,4 @@ const startServer = async () => {
 // =========================================================
 
 startServer();
+

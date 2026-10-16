@@ -1,4 +1,3 @@
-// routes/teacherRoutes.js
 
 const express = require("express");
 
@@ -8,12 +7,18 @@ const {
   getTeacherById,
   updateTeacher,
   deleteTeacher,
-  resetTeacherPassword,
+  regenerateTeacherQr,
+  generateMissingTeacherQr,
 } = require("../controllers/teacherController");
 
 const authMiddleware = require("../middleware/authMiddleware");
+const teacherUpload = require("../middleware/teacherUpload");
 
 const router = express.Router();
+
+/* =========================================================
+   GET ALL TEACHERS
+========================================================= */
 
 router.get(
   "/",
@@ -21,23 +26,63 @@ router.get(
   getTeachers
 );
 
+/* =========================================================
+   GET SINGLE TEACHER
+========================================================= */
+
 router.get(
   "/:id",
   authMiddleware,
   getTeacherById
 );
 
+/* =========================================================
+   ADD TEACHER
+   FormData + Image
+========================================================= */
+
 router.post(
   "/",
   authMiddleware,
+  teacherUpload.single("image"),
   addTeacher
 );
+
+/* =========================================================
+   UPDATE TEACHER
+   FormData + Image
+========================================================= */
 
 router.put(
   "/:id",
   authMiddleware,
+  teacherUpload.single("image"),
   updateTeacher
 );
+
+/* =========================================================
+   REGENERATE QR
+========================================================= */
+
+router.put(
+  "/:id/regenerate-qr",
+  authMiddleware,
+  regenerateTeacherQr
+);
+
+/* =========================================================
+   GENERATE MISSING QR
+========================================================= */
+
+router.put(
+  "/:id/generate-qr",
+  authMiddleware,
+  generateMissingTeacherQr
+);
+
+/* =========================================================
+   DELETE TEACHER
+========================================================= */
 
 router.delete(
   "/:id",
@@ -45,10 +90,5 @@ router.delete(
   deleteTeacher
 );
 
-router.patch(
-  "/:id/reset-password",
-  authMiddleware,
-  resetTeacherPassword
-);
-
 module.exports = router;
+

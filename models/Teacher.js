@@ -1,29 +1,37 @@
-// models/TeacherModel.js
-
-const {
-  createDefaultPermissions,
-} = require("../utils/teacherPermissions");
-
 const TeacherModel = {
-  teacherId: "",
-  name: "",
-  mobile: "",
-  email: "",
+teacherId: "",
 
-  branch: "Main Branch",
+qrToken: "",
 
-  passwordHash: "",
+name: "",
 
-  status: "active",
+mobile: "",
 
-  permissions: createDefaultPermissions(),
+email: "",
 
-  academicAccess: [],
+subject: "",
 
-  attendanceAccess: [],
+designation: "",
 
-  createdAt: new Date(),
-  updatedAt: new Date(),
+qualification: "",
+
+salary: "",
+
+joiningDate: "",
+
+address: "",
+
+status: "active",
+
+note: "",
+
+image: "",
+
+imagePublicId: "",
+
+createdAt: new Date(),
+
+updatedAt: new Date(),
 };
 
 module.exports = TeacherModel;

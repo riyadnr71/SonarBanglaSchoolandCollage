@@ -3,8 +3,6 @@ const StudentModel = {
   idCard: "",
   roll: "",
 
-  branch: "Main Branch",
-
   className: "",
   section: "",
   session: "",
