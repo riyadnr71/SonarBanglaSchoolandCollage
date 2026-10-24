@@ -1,152 +1,98 @@
+
 const { getDB } = require("../config/db");
 
 /* =========================================================
-GET SEAT PLAN BY CLASS + BRANCH
+   GET SEAT PLAN BY CLASS
+   Branch filter removed
 ========================================================= */
 
 const getSeatPlan = async (req, res) => {
-try {
-const db = getDB();
+  try {
+    const db = getDB();
 
+    const { className } = req.query;
 
-const {
-  className,
-  branch,
-} = req.query;
+    /* =====================================================
+       VALIDATION
+    ===================================================== */
 
-/* =====================================================
-   VALIDATION
-===================================================== */
-
-if (!className?.trim()) {
-  return res.status(400).json({
-    success: false,
-    message: "Class is required",
-  });
-}
-
-if (!branch?.trim()) {
-  return res.status(400).json({
-    success: false,
-    message: "Branch is required",
-  });
-}
-
-/* =====================================================
-   CLEAN VALUES
-===================================================== */
-
-const selectedClass =
-  className.trim();
-
-const selectedBranch =
-  branch.trim();
-
-/* =====================================================
-   GET ACTIVE STUDENTS
-   
-   Branch + Class দুটোই match করবে
-===================================================== */
-
-const students =
-  await db
-    .collection("students")
-    .find({
-      className: selectedClass,
-      branch: selectedBranch,
-      status: "Active",
-    })
-    .toArray();
-
-/* =====================================================
-   SORT BY ROLL
-===================================================== */
-
-students.sort((a, b) => {
-  const rollA =
-    parseInt(a.roll, 10);
-
-  const rollB =
-    parseInt(b.roll, 10);
-
-  /* -----------------------------------------------
-     দুই roll-ই number হলে numeric sort
-  ------------------------------------------------ */
-
-  if (
-    !isNaN(rollA) &&
-    !isNaN(rollB)
-  ) {
-    return rollA - rollB;
-  }
-
-  /* -----------------------------------------------
-     অন্যথায় natural string sort
-  ------------------------------------------------ */
-
-  return String(
-    a.roll || ""
-  ).localeCompare(
-    String(
-      b.roll || ""
-    ),
-    undefined,
-    {
-      numeric: true,
-      sensitivity: "base",
+    if (!className?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Class is required",
+      });
     }
-  );
-});
 
-/* =====================================================
-   RESPONSE
-===================================================== */
+    const selectedClass = className.trim();
 
-return res.status(200).json({
-  success: true,
+    /* =====================================================
+       GET ACTIVE STUDENTS BY CLASS
+       Branch is not required
+    ===================================================== */
 
-  branch:
-    selectedBranch,
+    const students = await db
+      .collection("students")
+      .find({
+        className: selectedClass,
+        status: "Active",
+      })
+      .toArray();
 
-  className:
-    selectedClass,
+    /* =====================================================
+       SORT BY ROLL
+    ===================================================== */
 
-  count:
-    students.length,
+    students.sort((a, b) => {
+      const rollA = Number(a.roll);
+      const rollB = Number(b.roll);
 
-  students,
-});
+      const validRollA =
+        a.roll !== undefined &&
+        a.roll !== null &&
+        String(a.roll).trim() !== "" &&
+        Number.isFinite(rollA);
 
+      const validRollB =
+        b.roll !== undefined &&
+        b.roll !== null &&
+        String(b.roll).trim() !== "" &&
+        Number.isFinite(rollB);
 
-} catch (error) {
-/* =====================================================
-ERROR
-===================================================== */
+      if (validRollA && validRollB) {
+        return rollA - rollB;
+      }
 
+      return String(a.roll || "").localeCompare(
+        String(b.roll || ""),
+        undefined,
+        {
+          numeric: true,
+          sensitivity: "base",
+        }
+      );
+    });
 
-console.error(
-  "Get Seat Plan Error:",
-  error
-);
+    /* =====================================================
+       RESPONSE
+    ===================================================== */
 
-return res.status(500).json({
-  success: false,
+    return res.status(200).json({
+      success: true,
+      className: selectedClass,
+      count: students.length,
+      students,
+    });
+  } catch (error) {
+    console.error("Get Seat Plan Error:", error);
 
-  message:
-    "Failed to generate seat plan",
-
-  error:
-    error.message,
-});
-
-
-}
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate seat plan",
+      error: error.message,
+    });
+  }
 };
 
-/* =========================================================
-EXPORT
-========================================================= */
-
 module.exports = {
-getSeatPlan,
+  getSeatPlan,
 };
