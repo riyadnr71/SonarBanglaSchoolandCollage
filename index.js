@@ -97,7 +97,7 @@ app.use(
       "http://localhost:5174",
       "https://schoolwebsite71.netlify.app",
       "https://school91.netlify.app",
-      "https://sonarbanglaschoolandcollage.netlify.app"
+      "https://sbscg.netlify.app"
     ],
     credentials: true,
   })
